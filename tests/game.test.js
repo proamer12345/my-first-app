@@ -109,3 +109,62 @@ test("mafia win at parity", () => {
   assert.equal(checkWin(r), true);
   assert.equal(r.winner, "mafia");
 });
+
+test("large-room distribution and Mafia teammate privacy", () => {
+  const r = room("LARGE", player("Host", 0, "#000000"));
+  r.players = Array.from({ length: 12 }, (_, i) =>
+    player("Guest " + i, i % 8, "#000000"),
+  );
+  start(r);
+  assert.equal(r.players.filter((p) => p.role === "mafia").length, 3);
+  assert.equal(r.players.filter((p) => p.role === "detective").length, 1);
+  assert.equal(r.players.filter((p) => p.role === "doctor").length, 1);
+  const mafia = r.players.find((p) => p.role === "mafia");
+  const snapshot = view(r, mafia);
+  assert.equal(snapshot.players.filter((p) => p.role === "mafia").length, 3);
+  assert.equal(
+    snapshot.players.some((p) => p.role === "doctor" || p.role === "detective"),
+    false,
+  );
+});
+
+test("multiple Mafia selections tie without an attack", () => {
+  const r = room("TIED", player("Host", 0, "#000000"));
+  r.players = Array.from({ length: 7 }, (_, i) =>
+    player("Guest " + i, i, "#000000"),
+  );
+  start(r);
+  const mafia = r.players.filter((p) => p.role === "mafia");
+  const targets = r.players.filter((p) => p.role === "citizen");
+  act(r, mafia[0], targets[0].id);
+  assert.throws(() => act(r, mafia[0], mafia[1].id), /target/);
+  act(r, mafia[1], targets[1].id);
+  advance(r);
+  assert.equal(r.recap.incident, false);
+  assert.equal(
+    r.players.every((p) => p.alive),
+    true,
+  );
+});
+
+test("a disconnected player cannot submit and a skip plurality spares everyone", () => {
+  const r = fixture();
+  const mafia = r.players.find((p) => p.role === "mafia");
+  mafia.connected = false;
+  assert.throws(
+    () => act(r, mafia, r.players.find((p) => p.role === "citizen").id),
+    /cannot act/,
+  );
+  mafia.connected = true;
+  advance(r);
+  advance(r);
+  advance(r);
+  act(r, r.players[0], "skip");
+  act(r, r.players[1], "skip");
+  act(r, r.players[2], r.players[3].id);
+  advance(r);
+  assert.equal(
+    r.players.every((p) => p.alive),
+    true,
+  );
+});

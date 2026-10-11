@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
+import { Atmosphere, PhaseCurtain, RoleDossier, Typewriter } from "./animation";
 import { createRoot } from "react-dom/client";
 import { io } from "socket.io-client";
 import "./style.css";
@@ -61,6 +63,8 @@ function App() {
     [revealed, setRevealed] = useState(false);
   const spoken = useRef("");
   const clockOffset = useRef(0);
+  const lastPhase = useRef("");
+  const latestSnapshot = useRef<GameView | null>(null);
   const send = (event: string, data: Record<string, unknown> = {}) =>
     socket.emit(event, data, (res: Reply) => {
       if (!res.ok) setError(res.error || "Something went wrong.");
@@ -97,9 +101,22 @@ function App() {
     socket.on("connect", resume);
 
     const receive = (snapshot: GameView) => {
+      latestSnapshot.current = snapshot;
       clockOffset.current = snapshot.serverNow - Date.now();
       setNow(snapshot.serverNow);
-      setState(snapshot);
+      const changed = lastPhase.current && lastPhase.current !== snapshot.phase;
+      lastPhase.current = snapshot.phase;
+      if (
+        changed &&
+        document.startViewTransition &&
+        document.visibilityState === "visible" &&
+        !matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        const transition = document.startViewTransition(() =>
+          flushSync(() => setState(latestSnapshot.current)),
+        );
+        void transition.ready.catch(() => {});
+      } else setState(snapshot);
     };
     const disconnect = () => setConnected(false);
     socket.on("state", receive);
@@ -155,7 +172,11 @@ function App() {
     active = me?.alive,
     phase = state?.phase || "lobby";
   return (
-    <div className={`app ${state?.theme || "noir"}`}>
+    <div className={`app ${state?.theme || "noir"} phase-${phase}`}>
+      <Atmosphere />
+      {state && phase !== "lobby" && (
+        <PhaseCurtain phase={phase} round={state.round} />
+      )}
       <header>
         <a className="brand" href="/">
           ◈ <span>MIDNIGHT COUNCIL</span>
@@ -169,7 +190,7 @@ function App() {
           </button>
         </div>
       </header>
-      <main>
+      <main className="phase-stage">
         {error && (
           <div className="error" role="alert">
             {error}
@@ -369,6 +390,19 @@ function App() {
             ) : (
               <>
                 <div className="phase-bar">
+                  {phase === "vote" && (
+                    <span
+                      className="vote-count"
+                      key={
+                        state.players.filter((p) => p.alive && p.voted).length
+                      }
+                      aria-live="polite"
+                    >
+                      {state.players.filter((p) => p.alive && p.voted).length} /{" "}
+                      {state.players.filter((p) => p.alive).length} ballots
+                      sealed
+                    </span>
+                  )}
                   <span>
                     {phase === "ended" ? "MATCH COMPLETE" : phase.toUpperCase()}
                   </span>
@@ -390,24 +424,21 @@ function App() {
                     Voice narrator
                   </label>
                 </div>
-                <div className="game-grid">
+                <div
+                  className={`game-grid phase-entrance entrance-${phase}`}
+                  key={`${phase}:${state.round}`}
+                >
                   <div>
                     <section className="panel role-panel">
                       <div className="eyebrow">
                         {active ? "YOUR PRIVATE ROLE" : "YOU ARE SPECTATING"}
                       </div>
-                      <h2>
-                        {revealed
-                          ? theme.roles[me.role || "citizen"]
-                          : "A secret identity"}
-                      </h2>
-                      <button
-                        className="quiet"
-                        onClick={() => setRevealed(!revealed)}
-                      >
-                        {revealed ? "Hide role" : "Reveal my role"}
-                      </button>
-                      {revealed && <p>{description[me.role || "citizen"]}</p>}
+                      <RoleDossier
+                        revealed={revealed}
+                        toggle={() => setRevealed(!revealed)}
+                        title={theme.roles[me.role || "citizen"]}
+                        description={description[me.role || "citizen"]}
+                      />
                       {me.clue && (
                         <div className="clue">
                           Private investigation · Round {me.clue.round}
@@ -451,7 +482,7 @@ function App() {
                             ? "An empty seat."
                             : "Everyone made it through."}
                         </h2>
-                        <p>{state.recap.text}</p>
+                        <Typewriter text={state.recap.text} />
                         {state.recap.victim && (
                           <p className="muted">
                             Public result: {state.recap.victim} was eliminated.
@@ -531,6 +562,11 @@ function App() {
                                 .map((p) => (
                                   <button
                                     key={p.id}
+                                    aria-pressed={
+                                      (phase === "vote"
+                                        ? me.vote
+                                        : me.action) === p.id
+                                    }
                                     disabled={!connected}
                                     className={
                                       (phase === "vote"
@@ -553,6 +589,7 @@ function App() {
                                 ))}
                               {phase === "vote" && (
                                 <button
+                                  aria-pressed={me.vote === "skip"}
                                   className={
                                     me.vote === "skip" ? "selected" : ""
                                   }
@@ -707,7 +744,13 @@ function Roster({
             </small>
           </div>
           {p.voted && state.phase === "vote" && (
-            <span title="Vote submitted">✓</span>
+            <span
+              className="vote-stamp"
+              title="Vote submitted"
+              aria-label="Vote submitted"
+            >
+              ✓
+            </span>
           )}
         </div>
       ))}

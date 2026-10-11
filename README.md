@@ -37,3 +37,9 @@ The checked-in Blueprint selects a paid Starter instance. Review current pricing
 React/TypeScript/Vite client, Express/Socket.IO server, regular CSS theme variables. The server validates role actions and sends personalized snapshots. Reconnect tokens live in browser localStorage; do not share them. Host control transfers after 30 seconds offline. Disconnected seats remain reserved during a match; lobby hosts can remove seats. Chat is available only in lobby, discussion, and voting to living players.
 
 Run **one server instance**, without autoscaling: rooms live in memory. Server restart/deploy ends active rooms. Empty rooms expire after one hour. Persistence, distributed scaling, moderation, and generated AI audio/art are future extensions. Browser voices may be unavailable or require a user gesture. No voice API costs are incurred.
+
+## Animated interface
+
+Each theme has a lightweight CSS atmosphere: Noir rain and streetlight flicker, Deep Space dust and stars, and Cyberpunk scanning gridlines. Phase changes use native View Transitions where supported and CSS entrances and curtains as a fallback. The private dossier flips, selections glow, and public ballot-submission totals and stamps animate without exposing vote targets. Morning scenes develop with a typewriter report and soft alert pulses. The interface respects `prefers-reduced-motion`, showing complete reports immediately and revealing dossiers without movement.
+
+With the server running, `npm run test:animations` checks all themes, mobile overflow, dossier controls, public recap effects, ballot feedback, and reduced-motion behavior using real multiplayer phases.
